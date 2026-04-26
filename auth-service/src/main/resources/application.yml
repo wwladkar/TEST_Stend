@@ -19,5 +19,5 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
 
 jwt:
-  secret: 
-  expiration-ms: 86400000
+  secret: ${JWT_SECRET:}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
