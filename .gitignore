@@ -1,0 +1,36 @@
+# Maven
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# Logs
+*.log
+
+# Veai
+.veai/
+
+# H2 database files
+data/
+
+# Frontend lock
+frontend/package-lock.json
+
+# Build artifacts
+target/
+*.jar
+*.class

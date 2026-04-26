@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      mvc:
+        routes:
+          - id: auth-service
+            uri: http://localhost:8081
+            predicates:
+              - Path=/api/auth/**,/api/admin/**,/api/users/**
+          - id: core-service
+            uri: http://localhost:8082
+            predicates:
+              - Path=/api/tasks/**
