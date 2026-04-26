@@ -218,9 +218,18 @@ UPDATE users SET role = 'ADMIN' WHERE username = 'your_username';
 
 **Не используй данный стенд как есть в продакшене!** Это учебный проект с намеренно упрощённой безопасностью.
 
-- JWT-секрет хранится в конфиге как fallback. Для реального использования задай переменную окружения:
+- JWT-секрет **обязательно** задаётся через переменную окружения (не хранится в репо):
   ```bash
-  export JWT_SECRET=your-own-random-secret-at-least-32-bytes-long!!
+  # Windows PowerShell
+  $env:JWT_SECRET="your-own-random-secret-at-least-32-bytes-long!!"
+
+  # Linux/Mac
+  export JWT_SECRET="your-own-random-secret-at-least-32-bytes-long!!"
+  ```
+  Или скопируй `.env.example` в `.env` и задай своё значение:
+  ```bash
+  cp .env.example .env
+  # отредактируй .env
   ```
 - H2 запущена с пользователем `sa` без пароля и открытым TCP-доступом
 - Пароли в Docker Compose (`teststend/teststend`) — только для локальной разработки

@@ -27,6 +27,9 @@ frontend/.env.local
 # H2 database files
 data/
 
+# Environment
+.env
+
 # Frontend lock
 frontend/package-lock.json
 
