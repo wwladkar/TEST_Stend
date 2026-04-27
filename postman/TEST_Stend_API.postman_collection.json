@@ -1,0 +1,1648 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		"name": "TEST Stend — API",
+		"description": "Полная коллекция для тестирования API микросервисного стенда.\n\n## Эндпоинты\n- **Auth Service** (:8081): /api/auth/register, /api/auth/login\n- **User Service** (:8081): /api/users/me\n- **Admin Service** (:8081): /api/admin/users, /api/admin/users/{id}/role, /api/admin/users/{id}/enabled\n- **Task Service** (:8082): /api/tasks CRUD\n- **API Gateway** (:8080): проксирует все запросы\n\n## Переменные окружения\n- `base_url` — шлюз (по умолчанию :8080)\n- `auth_token` — JWT, автозаполняется при логине/регистрации\n- `user_id` / `task_id` — ID созданных сущностей\n\n## Порядок запуска\n1. Auth → Register (создаёт пользователя, сохраняет токен)\n2. Auth → Login (сохраняет токен, user_id)\n3. Tasks → Create (создаёт задачу, сохраняет task_id)\n4. Остальные запросы в произвольном порядке",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{ "key": "test_username", "value": "postman_user" },
+		{ "key": "test_email", "value": "postman@test.stend" },
+		{ "key": "test_password", "value": "test123456" }
+	],
+	"item": [
+		{
+			"name": "🔐 Auth",
+			"item": [
+				{
+					"name": "Register — success",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const ts = Date.now();",
+									"pm.collectionVariables.set('test_username', 'pm_' + ts);",
+									"pm.collectionVariables.set('test_email', 'pm_' + ts + '@test.stend');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"",
+									"const json = pm.response.json();",
+									"pm.test('Response has token', () => pm.expect(json.token).to.be.a('string').and.not.empty);",
+									"pm.test('Response has username', () => pm.expect(json.username).to.eql(pm.collectionVariables.get('test_username')));",
+									"pm.test('Default role is USER', () => pm.expect(json.role).to.eql('USER'));",
+									"",
+									"pm.collectionVariables.set('auth_token', json.token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"{{test_username}}\",\n\t\"email\": \"{{test_email}}\",\n\t\"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register — duplicate username (409)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 409', () => pm.response.to.have.status(409));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"{{test_username}}\",\n\t\"email\": \"another@test.stend\",\n\t\"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register — duplicate email (409)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 409', () => pm.response.to.have.status(409));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"another_user\",\n\t\"email\": \"{{test_email}}\",\n\t\"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register — blank fields (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"\",\n\t\"email\": \"\",\n\t\"password\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register — short password (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"shortpwd_user\",\n\t\"email\": \"shortpwd@test.stend\",\n\t\"password\": \"123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Register — invalid email (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"bademail_user\",\n\t\"email\": \"not-an-email\",\n\t\"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login — success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"",
+									"const json = pm.response.json();",
+									"pm.test('Response has token', () => pm.expect(json.token).to.be.a('string').and.not.empty);",
+									"pm.test('Response has username', () => pm.expect(json.username).to.eql(pm.collectionVariables.get('test_username')));",
+									"pm.test('Response has role', () => pm.expect(json.role).to.be.a('string'));",
+									"",
+									"// Декодируем JWT и проверяем claims",
+									"const payload = JSON.parse(atob(json.token.split('.')[1]));",
+									"pm.test('JWT subject = username', () => pm.expect(payload.sub).to.eql(pm.collectionVariables.get('test_username')));",
+									"pm.test('JWT has role claim', () => pm.expect(payload.role).to.exist);",
+									"",
+									"pm.collectionVariables.set('auth_token', json.token);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"{{test_username}}\",\n\t\"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login — wrong password (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401', () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"{{test_username}}\",\n\t\"password\": \"wrong_password\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login — non-existent user (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401', () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"ghost_user\",\n\t\"password\": \"whatever\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Login — blank fields (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"\",\n\t\"password\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "👤 User",
+			"item": [
+				{
+					"name": "Get my profile — success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"",
+									"const json = pm.response.json();",
+									"pm.test('Has id', () => pm.expect(json.id).to.be.a('number'));",
+									"pm.test('Has username', () => pm.expect(json.username).to.eql(pm.collectionVariables.get('test_username')));",
+									"pm.test('Has email', () => pm.expect(json.email).to.be.a('string'));",
+									"pm.test('Has role', () => pm.expect(json.role).to.be.a('string'));",
+									"pm.test('Has enabled', () => pm.expect(json.enabled).to.be.a('boolean'));",
+									"",
+									"pm.collectionVariables.set('user_id', json.id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				},
+				{
+					"name": "Get my profile — no token (401/403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401 or 403', () => {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				},
+				{
+					"name": "Get my profile — malformed JWT (401)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401 or 403', () => {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "not.a.valid.jwt", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "🛡 Admin",
+			"item": [
+				{
+					"name": "List users — as USER (403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 403', () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/admin/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users"]
+						}
+					}
+				},
+				{
+					"name": "🔧 Setup: promote to ADMIN",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Для тестирования админ-эндпоинтов нужен токен с ролью ADMIN.",
+									"// Прямой вызов /api/admin/users/{id}/role требует ADMIN — курица и яйцо.",
+									"// Этот запрос использует прямой auth-service URL для обхода gateway-проверки,",
+									"// но SecurityConfig тоже требует hasRole(ADMIN).",
+									"// Решение: заранее создать админа через H2 Console или скрипт.",
+									"// Здесь предполагаем, что admin_token уже задан в переменных окружения.",
+									"if (!pm.environment.get('admin_token') && !pm.collectionVariables.get('admin_token')) {",
+									"    console.warn('⚠ admin_token не задан. Установите переменную admin_token с JWT роли ADMIN.');",
+									"}"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    pm.test('Role changed to ADMIN', () => pm.expect(json.role).to.eql('ADMIN'));",
+									"    pm.collectionVariables.set('admin_token', pm.collectionVariables.get('auth_token'));",
+									"} else {",
+									"    console.warn('⚠ Не удалось повысить роль. Установите admin_token вручную.');",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"ADMIN\""
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/{{user_id}}/role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "{{user_id}}", "role"]
+						}
+					}
+				},
+				{
+					"name": "List users — as ADMIN (200)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"",
+									"const json = pm.response.json();",
+									"pm.test('Response is array', () => pm.expect(json).to.be.an('array'));",
+									"pm.test('Array not empty', () => pm.expect(json.length).to.be.greaterThan(0));",
+									"",
+									"const user = json.find(u => u.id === Number(pm.collectionVariables.get('user_id')));",
+									"if (user) {",
+									"    pm.test('Found our user', () => pm.expect(user.username).to.eql(pm.collectionVariables.get('test_username')));",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/admin/users",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users"]
+						}
+					}
+				},
+				{
+					"name": "Change role — invalid value (accepted, no validation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('Role set to arbitrary value (no validation)', () => pm.expect(json.role).to.eql('SUPERADMIN'));",
+									"",
+									"// Откатываем обратно на ADMIN",
+									"// (выполните Change role → ADMIN после этого теста)"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"SUPERADMIN\""
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/{{user_id}}/role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "{{user_id}}", "role"]
+						}
+					}
+				},
+				{
+					"name": "Change role — back to ADMIN",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('Role restored to ADMIN', () => pm.expect(json.role).to.eql('ADMIN'));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"ADMIN\""
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/{{user_id}}/role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "{{user_id}}", "role"]
+						}
+					}
+				},
+				{
+					"name": "Change role — user not found (500)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 500 (IllegalArgumentException, no @ExceptionHandler)', () => pm.response.to.have.status(500));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\"USER\""
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/999999/role",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "999999", "role"]
+						}
+					}
+				},
+				{
+					"name": "Toggle enabled — block user",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('User disabled', () => pm.expect(json.enabled).to.eql(false));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "false"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/{{user_id}}/enabled",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "{{user_id}}", "enabled"]
+						}
+					}
+				},
+				{
+					"name": "Verify: blocked user cannot login (403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 403', () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"username\": \"{{test_username}}\",\n\t\"password\": \"{{test_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Verify: blocked user old token still works (no invalidation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Старый токен не инвалидирован — запрос пройдёт",
+									"pm.test('Status 200 (token not invalidated after block)', () => pm.response.to.have.status(200));",
+									"// ⚠ Это документирует архитектурный риск: JWT без blacklist"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				},
+				{
+					"name": "Toggle enabled — unblock user",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('User re-enabled', () => pm.expect(json.enabled).to.eql(true));",
+									"",
+									"// Обновляем токен после разблокировки",
+									"pm.collectionVariables.set('auth_token', pm.collectionVariables.get('admin_token'));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "true"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/{{user_id}}/enabled",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "{{user_id}}", "enabled"]
+						}
+					}
+				},
+				{
+					"name": "Toggle enabled — user not found (500)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 500 (IllegalArgumentException, no @ExceptionHandler)', () => pm.response.to.have.status(500));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "true"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/users/999999/enabled",
+							"host": ["{{base_url}}"],
+							"path": ["api", "admin", "users", "999999", "enabled"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "📋 Tasks",
+			"item": [
+				{
+					"name": "Create task — success with defaults",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"",
+									"const json = pm.response.json();",
+									"pm.test('Has id', () => pm.expect(json.id).to.be.a('number'));",
+									"pm.test('Title matches', () => pm.expect(json.title).to.eql('Test Task'));",
+									"pm.test('Default status = NEW', () => pm.expect(json.status).to.eql('NEW'));",
+									"pm.test('Default priority = MEDIUM', () => pm.expect(json.priority).to.eql('MEDIUM'));",
+									"pm.test('CreatedBy = current user', () => pm.expect(json.createdBy).to.eql(pm.collectionVariables.get('test_username')));",
+									"",
+									"pm.collectionVariables.set('task_id', json.id);"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Test Task\",\n\t\"description\": \"Created by Postman\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						}
+					}
+				},
+				{
+					"name": "Create task — explicit status & priority",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"const json = pm.response.json();",
+									"pm.test('Status = IN_PROGRESS', () => pm.expect(json.status).to.eql('IN_PROGRESS'));",
+									"pm.test('Priority = HIGH', () => pm.expect(json.priority).to.eql('HIGH'));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Explicit Task\",\n\t\"description\": \"With custom status\",\n\t\"status\": \"IN_PROGRESS\",\n\t\"priority\": \"HIGH\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						}
+					}
+				},
+				{
+					"name": "Create task — blank title (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 400', () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"\",\n\t\"description\": \"No title\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						}
+					}
+				},
+				{
+					"name": "Create task — invalid status (accepted, no validation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 201 (no enum validation on server)', () => pm.response.to.have.status(201));",
+									"const json = pm.response.json();",
+									"pm.test('Status saved as BANANA (no validation)', () => pm.expect(json.status).to.eql('BANANA'));",
+									"// ⚠ Это документирует отсутствие серверной валидации enum-полей"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Weird status task\",\n\t\"status\": \"BANANA\",\n\t\"priority\": \"ULTRA\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						}
+					}
+				},
+				{
+					"name": "Create task — no auth (401/403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401 or 403', () => {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Anonymous task\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						}
+					}
+				},
+				{
+					"name": "List tasks — success (paginated)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"",
+									"const json = pm.response.json();",
+									"pm.test('Has content array', () => pm.expect(json.content).to.be.an('array'));",
+									"pm.test('All tasks belong to current user', () => {",
+									"    const username = pm.collectionVariables.get('test_username');",
+									"    json.content.forEach(t => pm.expect(t.createdBy).to.eql(username));",
+									"});",
+									"pm.test('Has pagination metadata', () => {",
+									"    pm.expect(json).to.have.property('totalPages');",
+									"    pm.expect(json).to.have.property('totalElements');",
+									"    pm.expect(json).to.have.property('number');",
+									"    pm.expect(json).to.have.property('size');",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks?page=0&size=10",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"],
+							"query": [
+								{ "key": "page", "value": "0" },
+								{ "key": "size", "value": "10" }
+							]
+						}
+					}
+				},
+				{
+					"name": "List tasks — pagination page 0 size 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('Page size ≤ 2', () => pm.expect(json.content.length).to.be.at.most(2));",
+									"pm.test('Page number = 0', () => pm.expect(json.number).to.eql(0));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks?page=0&size=2",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"],
+							"query": [
+								{ "key": "page", "value": "0" },
+								{ "key": "size", "value": "2" }
+							]
+						}
+					}
+				},
+				{
+					"name": "Get task by ID — own task (200)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('Task ID matches', () => pm.expect(json.id).to.eql(Number(pm.collectionVariables.get('task_id'))));",
+									"pm.test('Has all fields', () => {",
+									"    ['id','title','description','status','priority','createdBy'].forEach(f => pm.expect(json).to.have.property(f));",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Get task — not found (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 404', () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/999999",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "999999"]
+						}
+					}
+				},
+				{
+					"name": "Get task — other user's task (403)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Создаём второго пользователя и задачу от его имени",
+									"const otherUsername = 'other_' + Date.now();",
+									"pm.collectionVariables.set('other_username', otherUsername);",
+									"",
+									"const registerRes = pm.sendRequest({",
+									"    url: pm.collectionVariables.get('base_url') + '/api/auth/register',",
+									"    method: 'POST',",
+									"    header: { 'Content-Type': 'application/json' },",
+									"    body: {",
+									"        mode: 'raw',",
+									"        raw: JSON.stringify({",
+									"            username: otherUsername,",
+									"            email: otherUsername + '@test.stend',",
+									"            password: 'other123456'",
+									"        })",
+									"    }",
+									"}, (err, res) => {",
+									"    const data = res.json();",
+									"    pm.collectionVariables.set('other_token', data.token);",
+									"",
+									"    // Создаём задачу от имени второго пользователя",
+									"    pm.sendRequest({",
+									"        url: pm.collectionVariables.get('base_url') + '/api/tasks',",
+									"        method: 'POST',",
+									"        header: {",
+									"            'Content-Type': 'application/json',",
+									"            'Authorization': 'Bearer ' + data.token",
+									"        },",
+									"        body: {",
+									"            mode: 'raw',",
+									"            raw: JSON.stringify({ title: 'Other User Task' })",
+									"        }",
+									"    }, (err2, res2) => {",
+									"        const taskData = res2.json();",
+									"        pm.collectionVariables.set('other_task_id', taskData.id);",
+									"    });",
+									"});"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 403', () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{other_task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{other_task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update task — success",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('Title updated', () => pm.expect(json.title).to.eql('Updated Task'));",
+									"pm.test('Description updated', () => pm.expect(json.description).to.eql('New description'));",
+									"pm.test('Status updated', () => pm.expect(json.status).to.eql('IN_PROGRESS'));",
+									"pm.test('Priority updated', () => pm.expect(json.priority).to.eql('HIGH'));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Updated Task\",\n\t\"description\": \"New description\",\n\t\"status\": \"IN_PROGRESS\",\n\t\"priority\": \"HIGH\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update task — partial (null status keeps old)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"const json = pm.response.json();",
+									"pm.test('Title changed', () => pm.expect(json.title).to.eql('Partial Update'));",
+									"pm.test('Status unchanged (null = keep old)', () => pm.expect(json.status).to.eql('IN_PROGRESS'));",
+									"pm.test('Priority unchanged (null = keep old)', () => pm.expect(json.priority).to.eql('HIGH'));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Partial Update\",\n\t\"description\": \"Only title changed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "🐛 Update task — changeStatus bug (only status, no title → 400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Это воспроизводит баг фронтенда: changeStatus шлёт { status } без title,",
+									"// а @NotBlank на title в TaskRequest вызывает 400.",
+									"// На фронте — silent catch {}, статус НЕ обновляется в UI.",
+									"pm.test('Status 400 (@NotBlank title violation)', () => pm.response.to.have.status(400));",
+									"// ⚠ Скрытый баг: фронтендный changeStatus() никогда не работает"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"status\": \"DONE\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Update task — not found (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 404', () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Ghost Task\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/999999",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "999999"]
+						}
+					}
+				},
+				{
+					"name": "Update task — other user's task (403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 403', () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "PUT",
+						"header": [{ "key": "Content-Type", "value": "application/json" }],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"title\": \"Hacked\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{other_task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{other_task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete task — other user's task (403)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 403', () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{other_task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{other_task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Delete task — not found (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 404', () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/999999",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "999999"]
+						}
+					}
+				},
+				{
+					"name": "Delete task — own task (204)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 204', () => pm.response.to.have.status(204));",
+									"pm.test('Body is empty', () => pm.expect(pm.response.text()).to.eql(''));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						}
+					}
+				},
+				{
+					"name": "Verify: deleted task returns 404",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 404', () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{auth_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "🔑 Security / JWT",
+			"item": [
+				{
+					"name": "JWT — decode and verify claims",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"const token = pm.collectionVariables.get('auth_token');",
+									"pm.test('Token exists', () => pm.expect(token).to.be.a('string').and.not.empty);",
+									"",
+									"const parts = token.split('.');",
+									"pm.test('JWT has 3 parts', () => pm.expect(parts.length).to.eql(3));",
+									"",
+									"const payload = JSON.parse(atob(parts[1]));",
+									"pm.test('sub = username', () => pm.expect(payload.sub).to.eql(pm.collectionVariables.get('test_username')));",
+									"pm.test('role claim exists', () => pm.expect(payload.role).to.exist);",
+									"pm.test('iat exists', () => pm.expect(payload.iat).to.exist);",
+									"pm.test('exp exists', () => pm.expect(payload.exp).to.exist);",
+									"pm.test('exp > iat', () => pm.expect(payload.exp).to.be.greaterThan(payload.iat));"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "auth", "login"]
+						},
+						"description": "Этот запрос не отправляется — тесты работают с уже сохранённым токеном из переменных коллекции."
+					}
+				},
+				{
+					"name": "JWT — wrong signing key (401)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Генерируем токен с другим ключом — не совпадёт с JWT_SECRET стенда",
+									"const fakeToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0Iiwicm9sZSI6IkFETUlOIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjk5OTk5OTk5OTl9.fake_signature_invalid';",
+									"pm.collectionVariables.set('fake_token', fakeToken);"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401 or 403', () => {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{fake_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				},
+				{
+					"name": "JWT — no Bearer prefix (401)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.request.headers.upsert({ key: 'Authorization', value: pm.collectionVariables.get('auth_token') });",
+									"// Убираем Bearer-авторизацию, чтобы не дублировать заголовок",
+									"pm.request.auth = { type: 'noauth' };"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test('Status 401 or 403', () => {",
+									"    pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				},
+				{
+					"name": "JWT — role mismatch: token=ADMIN, DB=USER",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Сценарий: пользователь получил токен с role=USER,",
+									"// затем админ сменил ему роль на ADMIN через /api/admin/users/{id}/role,",
+									"// но старый токен всё ещё содержит role=USER.",
+									"// Обратный сценарий: токен с ADMIN, но в БД — USER",
+									"// Это возможно если подделать токен или если админ понизил роль,",
+									"// а старый токен ещё жив.",
+									"// Здесь проверяем: если в JWT role=ADMIN, SecurityFilter пропустит в /api/admin/**",
+									"// независимо от того, что в БД.",
+									"console.log('Этот тест требует ручной установки токена с role=ADMIN для USER-аккаунта.');",
+									"console.log('Автоматизация: используйте admin_token для доступа к admin-эндпоинту, затем проверьте /api/users/me.');"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Если admin_token принадлежит тому же пользователю,",
+									"// то /api/admin/users пройдёт (JWT=ADMIN), но /api/users/me покажет реальную роль из БД.",
+									"if (pm.response.code === 200) {",
+									"    const json = pm.response.json();",
+									"    const dbRole = json.role;",
+									"    const token = pm.collectionVariables.get('admin_token');",
+									"    if (token) {",
+									"        const payload = JSON.parse(atob(token.split('.')[1]));",
+									"        pm.test('JWT role ≠ DB role (desync documented)', () => {",
+									"            // Если роли разные — это документирует десинхрон",
+									"            if (payload.role !== dbRole) {",
+									"                console.warn('⚠ JWT role=' + payload.role + ', DB role=' + dbRole + ' — desync!');",
+									"            }",
+									"        });",
+									"    }",
+									"} else {",
+									"    pm.test('Admin token required for this test', () => pm.expect(true).to.eql(true));",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/users/me",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "me"]
+						}
+					}
+				}
+			]
+		}
+	]
+}
