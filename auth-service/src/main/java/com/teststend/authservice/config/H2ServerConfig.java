@@ -1,13 +1,14 @@
 package com.teststend.authservice.config;
 
 import org.h2.tools.Server;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 import java.sql.SQLException;
 
 @Configuration
+@Profile("dev")
 public class H2ServerConfig {
 
     private static final String TCP_PORT = "9091";
@@ -19,7 +20,7 @@ public class H2ServerConfig {
     }
 
     @Bean(initMethod = "start", destroyMethod = "stop")
-    public Server h2WebServer(@Value("${spring.datasource.url}") String url) throws SQLException {
+    public Server h2WebServer() throws SQLException {
         return Server.createWebServer("-web", "-webAllowOthers", "-webPort", WEB_PORT);
     }
 }

@@ -1,4 +1,4 @@
-package com.teststend.authservice.util;
+package com.teststend.common.security;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -16,7 +16,7 @@ public class JwtTokenProvider {
     private final long expirationMs;
 
     public JwtTokenProvider(@Value("${jwt.secret}") String secret,
-                            @Value("${jwt.expiration-ms}") long expirationMs) {
+                            @Value("${jwt.expiration-ms:86400000}") long expirationMs) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
     }

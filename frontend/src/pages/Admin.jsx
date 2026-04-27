@@ -9,8 +9,9 @@ export default function Admin() {
     try {
       const res = await api.get('/api/admin/users')
       setUsers(res.data)
-    } catch {
+    } catch (err) {
       setError('Не удалось загрузить пользователей')
+      console.error('fetchUsers error:', err)
     }
   }
 
@@ -18,20 +19,22 @@ export default function Admin() {
 
   const changeRole = async (id, role) => {
     try {
-      await api.put(`/api/admin/users/${id}/role`, role, {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      await api.put(`/api/admin/users/${id}/role`, { role })
       fetchUsers()
-    } catch {}
+    } catch (err) {
+      setError('Не удалось изменить роль')
+      console.error('changeRole error:', err)
+    }
   }
 
   const toggleEnabled = async (id, enabled) => {
     try {
-      await api.put(`/api/admin/users/${id}/enabled`, enabled, {
-        headers: { 'Content-Type': 'application/json' }
-      })
+      await api.put(`/api/admin/users/${id}/enabled`, { enabled })
       fetchUsers()
-    } catch {}
+    } catch (err) {
+      setError('Не удалось изменить статус')
+      console.error('toggleEnabled error:', err)
+    }
   }
 
   return (

@@ -1,3 +1,6 @@
 package com.teststend.coreservice.dto;
 
-public record TaskDto(Long id, String title, String description, String status, String priority, String createdBy) {}
+import com.teststend.coreservice.entity.TaskPriority;
+import com.teststend.coreservice.entity.TaskStatus;
+
+public record TaskDto(Long id, String title, String description, TaskStatus status, TaskPriority priority, String createdBy) {}

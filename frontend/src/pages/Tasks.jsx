@@ -15,8 +15,9 @@ export default function Tasks() {
     try {
       const res = await api.get('/api/tasks')
       setTasks(res.data.content || res.data)
-    } catch {
+    } catch (err) {
       setError('Не удалось загрузить задачи')
+      console.error('fetchTasks error:', err)
     }
   }
 
@@ -30,7 +31,8 @@ export default function Tasks() {
       setTitle(''); setDescription(''); setPriority('MEDIUM')
       fetchTasks()
     } catch (err) {
-      setError(err.response?.data || 'Ошибка создания')
+      setError(err.response?.data?.message || err.response?.data || 'Ошибка создания')
+      console.error('createTask error:', err)
     }
   }
 
@@ -38,14 +40,25 @@ export default function Tasks() {
     try {
       await api.delete(`/api/tasks/${id}`)
       fetchTasks()
-    } catch {}
+    } catch (err) {
+      setError('Не удалось удалить задачу')
+      console.error('deleteTask error:', err)
+    }
   }
 
-  const changeStatus = async (id, status) => {
+  const changeStatus = async (task, newStatus) => {
     try {
-      await api.put(`/api/tasks/${id}`, { status })
+      await api.put(`/api/tasks/${task.id}`, {
+        title: task.title,
+        description: task.description,
+        status: newStatus,
+        priority: task.priority
+      })
       fetchTasks()
-    } catch {}
+    } catch (err) {
+      setError('Не удалось изменить статус')
+      console.error('changeStatus error:', err)
+    }
   }
 
   return (
@@ -96,7 +109,7 @@ export default function Tasks() {
               <td style={tdStyle}>{t.title}</td>
               <td style={tdStyle}>{t.description}</td>
               <td style={tdStyle}>
-                <select value={t.status} onChange={e => changeStatus(t.id, e.target.value)}
+                <select value={t.status} onChange={e => changeStatus(t, e.target.value)}
                   style={{ padding: 4 }}>
                   {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>

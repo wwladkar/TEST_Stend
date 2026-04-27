@@ -18,5 +18,65 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: test-stend-auth
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: 86400000
+      SPRING_PROFILES_ACTIVE: pg
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/teststend
+      SPRING_DATASOURCE_USERNAME: teststend
+      SPRING_DATASOURCE_PASSWORD: teststend
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  core-service:
+    build:
+      context: .
+      dockerfile: core-service/Dockerfile
+    container_name: test-stend-core
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: 86400000
+      SPRING_PROFILES_ACTIVE: pg
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/teststend
+      SPRING_DATASOURCE_USERNAME: teststend
+      SPRING_DATASOURCE_PASSWORD: teststend
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: test-stend-gateway
+    environment:
+      SPRING_CLOUD_GATEWAY_MVC_ROUTES_0_URI: http://auth-service:8081
+      SPRING_CLOUD_GATEWAY_MVC_ROUTES_1_URI: http://core-service:8082
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - core-service
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: test-stend-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
 volumes:
   postgres_data:

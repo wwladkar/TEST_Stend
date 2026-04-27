@@ -1,6 +1,7 @@
 # Maven
 target/
 *.class
+*.jar
 
 # IDE
 .idea/
@@ -30,10 +31,5 @@ data/
 # Environment
 .env
 
-# Frontend lock
-frontend/package-lock.json
-
 # Build artifacts
-target/
-*.jar
 *.class

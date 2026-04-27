@@ -1,8 +1,10 @@
 package com.teststend.authservice.controller;
 
+import com.teststend.authservice.dto.RoleChangeRequest;
+import com.teststend.authservice.dto.ToggleEnabledRequest;
 import com.teststend.authservice.dto.UserDto;
-import com.teststend.authservice.entity.User;
-import com.teststend.authservice.repository.UserRepository;
+import com.teststend.authservice.service.AdminService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,36 +13,24 @@ import java.util.List;
 @RequestMapping("/api/admin")
 public class AdminController {
 
-    private final UserRepository userRepository;
+    private final AdminService adminService;
 
-    public AdminController(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public AdminController(AdminService adminService) {
+        this.adminService = adminService;
     }
 
     @GetMapping("/users")
     public List<UserDto> listUsers() {
-        return userRepository.findAll().stream()
-                .map(this::toDto)
-                .toList();
+        return adminService.listUsers();
     }
 
     @PutMapping("/users/{id}/role")
-    public UserDto changeRole(@PathVariable Long id, @RequestBody String role) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
-        user.setRole(role);
-        return toDto(userRepository.save(user));
+    public UserDto changeRole(@PathVariable Long id, @Valid @RequestBody RoleChangeRequest request) {
+        return adminService.changeRole(id, request);
     }
 
     @PutMapping("/users/{id}/enabled")
-    public UserDto toggleEnabled(@PathVariable Long id, @RequestBody boolean enabled) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден"));
-        user.setEnabled(enabled);
-        return toDto(userRepository.save(user));
-    }
-
-    private UserDto toDto(User u) {
-        return new UserDto(u.getId(), u.getUsername(), u.getEmail(), u.getRole(), u.isEnabled());
+    public UserDto toggleEnabled(@PathVariable Long id, @Valid @RequestBody ToggleEnabledRequest request) {
+        return adminService.toggleEnabled(id, request);
     }
 }
