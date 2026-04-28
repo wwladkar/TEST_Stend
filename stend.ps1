@@ -1,5 +1,5 @@
 # ============================================================
-#  TEST Stend — unified management script
+#  TEST Stend — unified management script (Windows)
 #  Usage:
 #    .\stend.ps1           — build + start
 #    .\stend.ps1 start     — start without build
@@ -11,15 +11,30 @@
 
 $ErrorActionPreference = "Stop"
 
-# --- Configuration ---
-$Script:JavaHome = "C:\Program Files\Eclipse Adoptium\jdk-17.0.18.8-hotspot"
-$Script:JavaExe = Join-Path $JavaHome "bin\java.exe"
-$Script:MavenHome = "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2024.3.2.2\plugins\maven\lib\maven3"
-$Script:MvnCmd = Join-Path $MavenHome "bin\mvn.cmd"
-$Script:WorkDir = "C:\Users\User\IdeaProjects\TEST_Stend"
+# --- Configuration (auto-detected) ---
+$Script:WorkDir     = $PSScriptRoot
 $Script:FrontendDir = Join-Path $WorkDir "frontend"
-$Script:SpringProfile = "dev"
-$Script:LogDir = Join-Path $WorkDir "logs"
+$Script:LogDir      = Join-Path $WorkDir "logs"
+$Script:SpringProfile = ""   # empty = H2 default; set to "pg" for PostgreSQL
+
+# Auto-detect Java
+$Script:JavaHome = if ($env:JAVA_HOME) { $env:JAVA_HOME } else {
+    $javaCmd = Get-Command java -ErrorAction SilentlyContinue
+    if ($javaCmd) { Split-Path (Split-Path $javaCmd.Source) } else { $null }
+}
+$Script:JavaExe = if ($JavaHome) { Join-Path $JavaHome "bin\java.exe" } else { $null }
+
+# Auto-detect Maven: Maven Wrapper > IDEA bundled > system
+$Script:MvnCmd = $null
+$mavenWrapper = Join-Path $WorkDir "mvnw.cmd"
+if (Test-Path $mavenWrapper) {
+    $Script:MvnCmd = $mavenWrapper
+} elseif ($env:MAVEN_HOME) {
+    $Script:MvnCmd = Join-Path $env:MAVEN_HOME "bin\mvn.cmd"
+} else {
+    $sysMvn = Get-Command mvn.cmd -ErrorAction SilentlyContinue
+    if ($sysMvn) { $Script:MvnCmd = $sysMvn.Source }
+}
 
 $Script:Services = @(
     @{ Name = "Auth Service";  Port = 8081; Jar = "auth-service\target\auth-service-1.0.0-SNAPSHOT.jar" }
@@ -28,17 +43,24 @@ $Script:Services = @(
 )
 $Script:Frontend = @{ Name = "Frontend"; Port = 3000 }
 
-# --- Load .env ---
+# --- Load and validate .env ---
 function Load-Env {
     $envFile = Join-Path $WorkDir ".env"
     if (-not (Test-Path $envFile)) {
-        Write-Host "[ERROR] .env not found. Copy from .env.example" -ForegroundColor Red
+        Write-Host "[ERROR] .env not found. Run: copy .env.example .env" -ForegroundColor Red
         exit 1
     }
     Get-Content $envFile | ForEach-Object {
         if ($_ -match "^\s*([^#][^=]+)=(.*)$") {
             [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), "Process")
         }
+    }
+
+    # Validate JWT_SECRET
+    $placeholder = "your-random-secret-at-least-32-bytes-long!!"
+    if (-not $env:JWT_SECRET -or $env:JWT_SECRET -eq $placeholder) {
+        Write-Host "[ERROR] JWT_SECRET is not set or has placeholder value. Edit .env!" -ForegroundColor Red
+        exit 1
     }
 }
 
@@ -51,20 +73,39 @@ function Start-JavaService {
         return $false
     }
 
+    $profileArg = if ($SpringProfile) { "-Dspring.profiles.active=$SpringProfile" } else { "" }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $JavaExe
-    $psi.Arguments = "-Dspring.profiles.active=$SpringProfile -jar `"$jarPath`""
+    $psi.Arguments = "$profileArg -jar `"$jarPath`""
     $psi.WorkingDirectory = $WorkDir
     $psi.UseShellExecute = $false
-    # No output redirection — prevents blocking
     $psi.CreateNoWindow = $true
+
+    # Redirect stdout/stderr to log files
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError  = $true
+    $stdLog = Join-Path $LogDir "$($Svc.Name -replace ' ','').log"
+    $errLog = Join-Path $LogDir "$($Svc.Name -replace ' ','')-error.log"
 
     # Inherit all current env vars (includes JWT_SECRET from .env)
     foreach ($key in [Environment]::GetEnvironmentVariables("Process").Keys) {
         $psi.EnvironmentVariables[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
     }
 
-    [System.Diagnostics.Process]::Start($psi) | Out-Null
+    $proc = [System.Diagnostics.Process]::Start($psi)
+
+    # Async redirect to log files
+    $stdSw  = [System.IO.StreamWriter]::new($stdLog, $true)
+    $errSw  = [System.IO.StreamWriter]::new($errLog, $true)
+    $proc.BeginOutputReadLine()
+    $proc.BeginErrorReadLine()
+    Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -Action {
+        if ($Event.SourceEventArgs.Data) { $stdSw.WriteLine($Event.SourceEventArgs.Data) }
+    } | Out-Null
+    Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -Action {
+        if ($Event.SourceEventArgs.Data) { $errSw.WriteLine($Event.SourceEventArgs.Data) }
+    } | Out-Null
+
     return $true
 }
 
@@ -82,7 +123,6 @@ function Wait-ForPort {
 # --- Check if a TCP port is open ---
 function Test-Port {
     param([int]$Port)
-    # Check via netstat — works for both IPv4 and IPv6
     $result = netstat -ano 2>$null | Select-String ":$Port " | Select-String "LISTEN"
     return ($null -ne $result)
 }
@@ -91,12 +131,26 @@ function Test-Port {
 function Invoke-Build {
     Write-Host ""
     Write-Host "[BUILD] Assembling project..." -ForegroundColor Cyan
-    if (-not (Test-Path $MvnCmd)) {
-        Write-Host "  [ERROR] Maven not found: $MvnCmd" -ForegroundColor Red
+
+    if (-not $JavaExe -or -not (Test-Path $JavaExe)) {
+        Write-Host "  [ERROR] Java not found. Set JAVA_HOME or add java to PATH." -ForegroundColor Red
         exit 1
     }
+    if (-not $MvnCmd -or -not (Test-Path $MvnCmd)) {
+        Write-Host "  [ERROR] Maven not found. Install Maven or use Maven Wrapper (mvnw.cmd)." -ForegroundColor Red
+        exit 1
+    }
+
     $env:JAVA_HOME = $JavaHome
-    & $MvnCmd clean package -DskipTests -q 2>&1 | Out-Null
+    Write-Host "  Java:   $JavaExe" -ForegroundColor Gray
+    Write-Host "  Maven:  $MvnCmd" -ForegroundColor Gray
+
+    if ($MvnCmd.EndsWith('.cmd')) {
+        $buildOutput = cmd /c "`"$MvnCmd`" clean package -DskipTests -q" 2>&1
+        $buildOutput | Out-Null
+    } else {
+        & $MvnCmd clean package -DskipTests -q 2>&1 | Out-Null
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [ERROR] Build failed" -ForegroundColor Red
         exit 1
@@ -132,7 +186,7 @@ function Invoke-Start {
         if (Wait-ForPort -Port $svc.Port -TimeoutSec 30) {
             Write-Host " OK" -ForegroundColor Green
         } else {
-            Write-Host " FAILED" -ForegroundColor Red
+            Write-Host " FAILED (check logs/)" -ForegroundColor Red
         }
     }
 
@@ -205,11 +259,15 @@ function Show-Status {
 function Invoke-Clean {
     Invoke-Stop
     Write-Host ""
-    Write-Host "[CLEAN] Removing H2 data..." -ForegroundColor Cyan
+    Write-Host "[CLEAN] Removing H2 data and logs..." -ForegroundColor Cyan
     $dataDir = Join-Path $WorkDir "data"
     if (Test-Path $dataDir) {
         Remove-Item $dataDir -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "  H2 data removed" -ForegroundColor Green
+    }
+    if (Test-Path $LogDir) {
+        Remove-Item $LogDir -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "  Logs removed" -ForegroundColor Green
     }
     Write-Host "  Rebuilding..." -ForegroundColor Cyan
     Invoke-Build
@@ -226,5 +284,5 @@ switch ($action) {
     "restart" { Invoke-Stop; Start-Sleep 3; Invoke-Start }
     "status"  { Show-Status }
     "clean"   { Invoke-Clean }
-    default   { Write-Host "Unknown command: $action`nUsage: .\stend.ps1 [start|stop|restart|status|clean]" -ForegroundColor Red; exit 1 }
+    default   { Write-Host "Unknown command: $action`nUsage: .\stend.ps1 [build|start|stop|restart|status|clean]" -ForegroundColor Red; exit 1 }
 }

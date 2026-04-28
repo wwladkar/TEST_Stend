@@ -25,10 +25,11 @@
 
 | Слой | Технология |
 |------|-----------|
-| **Frontend** | React 18, TypeScript, Vite, Axios, React Router |
+| **Frontend** | React 18, JavaScript (JSX), Vite, Axios, React Router |
 | **API Gateway** | Spring Cloud Gateway (MVC) |
 | **Auth Service** | Spring Boot 3.2, Spring Security, JWT (jjwt 0.12), JPA |
 | **Core Service** | Spring Boot 3.2, Spring Security, JWT, JPA |
+| **Common Security** | Общий модуль: JWT, фильтры, CORS, blacklist (shared lib) |
 | **БД** | H2 (embedded, текущая) / PostgreSQL (Docker Compose) |
 | **Инфраструктура** | Docker Compose, Maven (multi-module) |
 
@@ -37,21 +38,31 @@
 ```
 TEST_Stend/
 ├── pom.xml                    # Корневой Maven (multi-module)
-├── docker-compose.yml         # PostgreSQL для продакшн-режима
+├── docker-compose.yml         # Полный стек: PostgreSQL + сервисы + frontend
+├── .env.example               # Шаблон переменных окружения (JWT_SECRET и др.)
+├── stend.ps1                  # Скрипт управления (Windows)
+├── stend.sh                   # Скрипт управления (Linux/Mac)
+├── common-security/           # Общий модуль безопасности
+│   └── src/main/.../common/security/
+│       ├── BaseSecurityConfig.java     # CORS-конфигурация
+│       ├── JwtTokenProvider.java       # Генерация JWT
+│       ├── JwtAuthFilter.java          # Фильтр валидации JWT
+│       ├── TokenBlacklist.java         # In-memory блэклист токенов
+│       └── GlobalExceptionHandler.java # IllegalArgumentException → 404
 ├── auth-service/              # Сервис авторизации (:8081)
 │   └── src/main/.../authservice/
-│       ├── config/            # SecurityConfig, JwtAuthFilter, H2ServerConfig
+│       ├── config/            # SecurityConfig, AuthExceptionHandler, H2ServerConfig
 │       ├── controller/        # AuthController, UserController, AdminController
-│       ├── dto/               # LoginRequest, RegisterRequest, AuthResponse, UserDto
+│       ├── dto/               # LoginRequest, RegisterRequest, AuthResponse, UserDto,
+│       │                      # RoleChangeRequest, ToggleEnabledRequest
 │       ├── entity/            # User
-│       ├── repository/        # UserRepository
-│       └── util/              # JwtTokenProvider
+│       └── repository/        # UserRepository
 ├── core-service/              # Сервис задач (:8082)
 │   └── src/main/.../coreservice/
-│       ├── config/            # SecurityConfig, JwtAuthFilter, H2ServerConfig
+│       ├── config/            # SecurityConfig, H2ServerConfig
 │       ├── controller/        # TaskController
 │       ├── dto/               # TaskRequest, TaskDto
-│       ├── entity/            # Task
+│       ├── entity/            # Task, TaskStatus, TaskPriority
 │       └── repository/        # TaskRepository
 ├── api-gateway/               # API Gateway (:8080)
 │   └── src/main/.../apigateway/
@@ -69,30 +80,110 @@ TEST_Stend/
 ### Предварительные требования
 
 - **Java 17+**
+- **Maven 3.9+** (или используй Maven Wrapper — см. ниже)
 - **Node.js 20+** (с npm)
-- **Docker** (опционально — для PostgreSQL)
+- **Docker** (опционально — для полного стека)
 
-### 1. База данных
+### 0. Переменные окружения (обязательно!)
 
-**Режим H2 (по умолчанию, без установки):**
-Ничего дополнительно настраивать не нужно — H2 работает как embedded-БД.
+Перед запуском бэкенда задай JWT-секрет:
 
-**Режим PostgreSQL (через Docker):**
+```bash
+# Скопируй шаблон и задай свой секрет
+# Linux/Mac:
+cp .env.example .env
+# Windows PowerShell:
+copy .env.example .env
+# Отредактируй .env — укажи уникальный JWT_SECRET (минимум 32 байта)
+```
+
+> Эта переменная нужна **до** любого запуска бэкенда — как локального, так и через Docker Compose.
+
+Или установи переменную напрямую:
+```bash
+# Windows PowerShell
+$env:JWT_SECRET="your-own-random-secret-at-least-32-bytes-long!!"
+
+# Linux/Mac
+export JWT_SECRET="your-own-random-secret-at-least-32-bytes-long!!"
+```
+
+> ⚠️ Без `JWT_SECRET` бэкенд **не запустится** — Spring упадёт при создании `JwtTokenProvider`.
+
+### 1. Быстрый старт (одной командой)
+
+Проект содержит скрипты для управления стендом — сборка, запуск, остановка и мониторинг:
+
+**Windows:**
+```powershell
+.\stend.ps1              # сборка + запуск всех сервисов
+.\stend.ps1 start        # запустить без сборки
+.\stend.ps1 stop         # остановить все сервисы
+.\stend.ps1 restart      # перезапуск
+.\stend.ps1 status       # проверить статус портов
+.\stend.ps1 clean        # удалить БД + логи + пересобрать
+```
+
+**Linux/Mac:**
+```bash
+chmod +x stend.sh        # первый раз — сделать исполняемым
+./stend.sh               # сборка + запуск всех сервисов
+./stend.sh start         # запустить без сборки
+./stend.sh stop          # остановить все сервисы
+./stend.sh restart       # перезапуск
+./stend.sh status        # проверить статус портов
+./stend.sh clean         # удалить БД + логи + пересобрать
+```
+
+Скрипты автоматически:
+- Определяют пути к Java и Maven (проверяют `JAVA_HOME`, `PATH`, Maven Wrapper)
+- Загружают и валидируют `.env` (включая проверку `JWT_SECRET`)
+- Запускают сервисы с перенаправлением логов в `logs/`
+- Ждут готовности каждого сервиса (по TCP-порту)
+
+### 2. Полный стек через Docker Compose
+
+Если Docker установлен — это самый простой вариант, не требующий Java/Maven/Node:
+
 ```bash
 docker compose up -d
 ```
-Затем переключить `spring.datasource.url` в `application.yml` обоих сервисов на PostgreSQL.
 
-### 2. Бэкенд
+Поднимает PostgreSQL, все бэкенд-сервисы и frontend одной командой.
+Сервисы автоматически используют PostgreSQL (профиль `pg` активируется через `SPRING_PROFILES_ACTIVE` в docker-compose.yml).
 
+> `docker compose` автоматически подхватит переменную `JWT_SECRET` из файла `.env` (шаг 0).
+
+### 3. Ручной запуск (H2, без Docker)
+
+**Режим H2 (по умолчанию):**
+H2 работает как embedded-БД, ничего дополнительно настраивать не нужно.
+
+Порядок запуска:
 ```bash
+# 1. Собрать (Maven Wrapper или системный Maven)
+# Через Maven Wrapper (рекомендуется, если Maven не установлен):
+./mvnw clean package -DskipTests        # Linux/Mac
+.\mvnw.cmd clean package -DskipTests    # Windows
+# Или через системный Maven:
 mvn clean package -DskipTests
+
+# 2. Запустить сервисы (в отдельных терминалах)
 java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar
 java -jar core-service/target/core-service-1.0.0-SNAPSHOT.jar
 java -jar api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar
 ```
 
-### 3. Фронтенд
+**Режим PostgreSQL (локально с внешней БД):**
+Если PostgreSQL уже запущен (например, через `docker compose up -d postgres`),
+добавь флаг `--spring.profiles.active=pg` — он подключит `application-pg.yml` с настройками PostgreSQL:
+```bash
+java -jar auth-service/target/auth-service-1.0.0-SNAPSHOT.jar --spring.profiles.active=pg
+java -jar core-service/target/core-service-1.0.0-SNAPSHOT.jar --spring.profiles.active=pg
+java -jar api-gateway/target/api-gateway-1.0.0-SNAPSHOT.jar
+```
+
+### 4. Фронтенд (только при ручном запуске)
 
 ```bash
 cd frontend
@@ -100,7 +191,7 @@ npm install
 npm run dev
 ```
 
-### 4. Открыть в браузере
+### 5. Открыть в браузере
 
 👉 **http://localhost:3000**
 
@@ -195,7 +286,7 @@ UPDATE users SET role = 'ADMIN' WHERE username = 'your_username';
 
 | Параметр | Значение по умолчанию | Описание |
 |----------|----------------------|----------|
-| `jwt.secret` | `SuperSecretKey...` | Секрет для подписи JWT (заменить в продакшене!) |
+| `jwt.secret` | *(обязательный env)* | Секрет для подписи JWT. Задаётся через `JWT_SECRET`, без значения по умолчанию |
 | `jwt.expiration-ms` | `86400000` (24ч) | Время жизни JWT-токена |
 | `server.port` (auth) | `8081` | Порт Auth Service |
 | `server.port` (core) | `8082` | Порт Core Service |
@@ -205,11 +296,11 @@ UPDATE users SET role = 'ADMIN' WHERE username = 'your_username';
 
 ## 📌 TODO
 
-- [ ] Переключение на PostgreSQL через Spring Profiles
+- [x] Переключение на PostgreSQL через Spring Profiles
 - [ ] Refresh-токены
 - [ ] Восстановление пароля
 - [ ] Фильтрация и сортировка задач
-- [ ] Docker Compose для полного стека (сервисы + БД)
+- [x] Docker Compose для полного стека (сервисы + БД)
 - [ ] Swagger/OpenAPI документация
 - [ ] Примеры автотестов (Playwright + REST Assured)
 - [ ] CI/CD пайплайн с запуском тестов
